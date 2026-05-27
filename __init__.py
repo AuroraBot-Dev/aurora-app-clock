@@ -1,3 +1,3 @@
-from .runtime import ExampleApplication
+from .runtime import ClockApplication
 
-__all__ = ["ExampleApplication"]
+__all__ = ["ClockApplication"]
