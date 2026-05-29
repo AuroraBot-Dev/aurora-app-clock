@@ -60,13 +60,24 @@
 
 ---
 
-## 使用
+## 事件
 
-在 `config.yml` 的 `apps` 节点下添加或启用 `clock`:
+| 事件类型                | 触发时机         |
+| ----------------------- | ---------------- |
+| `clock.alarm_triggered` | 闹钟到点触发时   |
+| `clock.timer_triggered` | 倒计时到点触发时 |
+
+---
+
+## 配置
+
+时钟应用无需启动参数（`ClockApplication.__init__` 无入参）。
+
+在 `apps/config.yml` 中启用：
 
 ```yaml
 apps:
-  clock:
+  aurora-app-clock:
     enabled: true
     startup: {}
   # //其他应用//
@@ -74,3 +85,13 @@ apps:
 
 - `enabled: true` -- 启用该应用
 - `startup: {}` -- 启动参数, 时钟应用无需额外启动配置
+
+---
+
+## app-data
+
+应用数据目录: `data/app_data/im_polaris_clock/`
+
+| 文件                | 说明                      |
+| ------------------- | ------------------------- |
+| `clock_events.json` | 持久化闹钟/计时器事件列表 |
