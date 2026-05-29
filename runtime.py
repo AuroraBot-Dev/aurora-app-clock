@@ -16,9 +16,12 @@ if TYPE_CHECKING:
 # ── 计时器解析（相对时长） ─────────────────────────
 
 _DURATION_UNITS: dict[str, float] = {
-    "秒": 1, "秒钟": 1,
-    "分": 60, "分钟": 60,
-    "时": 3600, "小时": 3600,
+    "秒": 1,
+    "秒钟": 1,
+    "分": 60,
+    "分钟": 60,
+    "时": 3600,
+    "小时": 3600,
 }
 _DURATION_PATTERN = re.compile(r"(\d+(?:\.\d+)?)\s*(秒钟|秒钟|分钟|小时|秒|分|时)")
 
@@ -30,6 +33,9 @@ def _parse_duration(text: str) -> tuple[float, str]:
         unit = m.group(2)
         seconds = value * _DURATION_UNITS.get(unit, 1)
         message = _DURATION_PATTERN.sub("", text).strip().strip("，,。.")
+        message = message.lstrip("后").lstrip()
+        if message.startswith("之后"):
+            message = message[2:].lstrip()
         return seconds, message
     try:
         return float(text.strip()), ""
@@ -48,16 +54,20 @@ def _parse_alarm_time(text: str) -> dict[str, object]:
     raw = text.strip()
 
     repeat = "none"
+    date_hint = "auto"
     m = _ALARM_PREFIX.match(raw)
     if m:
         prefix = m.group(1)
         if prefix == "每天":
             repeat = "daily"
+            date_hint = "auto"
         elif prefix == "明天":
             repeat = "none"
+            date_hint = "tomorrow"
         else:
             repeat = "none"
-        raw = raw[m.end():].strip()
+            date_hint = "today"
+        raw = raw[m.end() :].strip()
 
     dt_match = _ALARM_DATETIME.search(raw)
     if dt_match:
@@ -88,16 +98,14 @@ def _parse_alarm_time(text: str) -> dict[str, object]:
 
     now = datetime.now()
     target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-
-    if repeat == "daily":
+    if date_hint == "tomorrow":
+        target += timedelta(days=1)
+    elif date_hint == "today":
         if target <= now:
             target += timedelta(days=1)
     else:
-        # "明天" 也走这里（前缀已消耗）, 普通时间戳默认明天
-        target += timedelta(days=1)
-        if repeat != "none":
-            if target <= now:
-                target += timedelta(days=1)
+        if target <= now:
+            target += timedelta(days=1)
 
     return {
         "trigger_at": target.timestamp(),
@@ -107,6 +115,7 @@ def _parse_alarm_time(text: str) -> dict[str, object]:
 
 
 # ── ClockApplication ───────────────────────────────
+
 
 class ClockApplication:
     def __init__(self) -> None:
@@ -205,15 +214,17 @@ class ClockApplication:
         for e in self._events:
             remain = max(0, float(e.get("trigger_at", now)) - now)
             kind = str(e.get("kind", "alarm"))
-            items.append({
-                "id": e["id"],
-                "kind": kind,
-                "message": e.get("message", ""),
-                "status": e.get("status", "pending"),
-                "repeat": e.get("repeat"),
-                "remaining_seconds": round(remain, 1),
-                "trigger_str": e.get("trigger_str"),
-            })
+            items.append(
+                {
+                    "id": e["id"],
+                    "kind": kind,
+                    "message": e.get("message", ""),
+                    "status": e.get("status", "pending"),
+                    "repeat": e.get("repeat"),
+                    "remaining_seconds": round(remain, 1),
+                    "trigger_str": e.get("trigger_str"),
+                }
+            )
         return {"items": items, "count": len(items)}
 
     # ── 内部 ────────────────────────────────────────
@@ -231,16 +242,18 @@ class ClockApplication:
 
             kind = str(event.get("kind", "alarm"))
             repeat = str(event.get("repeat", "none"))
-            api.emit_event(AppEvent(
-                source=api.package,
-                type=f"clock.{kind}_triggered",
-                summary=str(event.get("message", "")),
-                payload={
-                    "event_id": event["id"],
-                    "kind": kind,
-                    "message": event.get("message", ""),
-                },
-            ))
+            api.emit_event(
+                AppEvent(
+                    source=api.package,
+                    type=f"clock.{kind}_triggered",
+                    summary=str(event.get("message", "")),
+                    payload={
+                        "event_id": event["id"],
+                        "kind": kind,
+                        "message": event.get("message", ""),
+                    },
+                )
+            )
 
             if kind == "alarm" and repeat == "daily":
                 event["trigger_at"] = trigger_at + 86400
